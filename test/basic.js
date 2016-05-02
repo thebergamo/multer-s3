@@ -83,6 +83,40 @@ describe('Multer S3', function () {
       assert.equal(req.file.bucket, 'test')
       assert.equal(req.file.etag, 'mock-etag')
       assert.equal(req.file.location, 'mock-location')
+      assert.equal(req.file.buffer, null)
+      // assert.equal(typeof req.file.buffer, 'object')
+      // assert.equal(req.file.buffer.length, 68)
+
+      done()
+    })
+  })
+
+  it('upload files auto contentType', function (done) {
+    var s3 = mockS3()
+    var form = new FormData()
+    var storage = multerS3({
+      s3: s3,
+      bucket: 'test',
+      contentType: multerS3.AUTO_CONTENT_TYPE
+    })
+    var upload = multer({ storage: storage })
+    var parser = upload.single('image')
+    var image = fs.createReadStream(path.join(__dirname, 'files', 'ffffff.png'))
+
+    form.append('name', 'Multer')
+    form.append('image', image)
+
+    submitForm(parser, form, function (err, req) {
+      assert.ifError(err)
+
+      assert.equal(req.body.name, 'Multer')
+
+      assert.equal(req.file.fieldname, 'image')
+      assert.equal(req.file.originalname, 'ffffff.png')
+      assert.equal(req.file.size, 68)
+      assert.equal(req.file.bucket, 'test')
+      assert.equal(req.file.etag, 'mock-etag')
+      assert.equal(req.file.location, 'mock-location')
       assert.equal(typeof req.file.buffer, 'object')
       assert.equal(req.file.buffer.length, 68)
 
