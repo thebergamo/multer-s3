@@ -27,11 +27,14 @@ function autoContentType (req, file, cb) {
     var type = fileType(firstChunk)
     var mime = (type === null ? 'application/octet-stream' : type.mime)
     var outStream = new stream.PassThrough()
+    var bufferStream = new stream.PassThrough()
 
     outStream.write(firstChunk)
+    bufferStream.write(firstChunk)
     file.stream.pipe(outStream)
+    file.stream.pipe(bufferStream)
 
-    cb(null, mime, outStream)
+    cb(null, mime, outStream, bufferStream)
   })
 }
 
@@ -45,7 +48,7 @@ function collect (storage, req, file, cb) {
       storage.getAcl(req, file, function (err, acl) {
         if (err) return cb(err)
 
-        storage.getContentType(req, file, function (err, contentType, replacementStream) {
+        storage.getContentType(req, file, function (err, contentType, replacementStream, bufferStream) {
           if (err) return cb(err)
 
           cb.call(storage, null, {
@@ -53,7 +56,8 @@ function collect (storage, req, file, cb) {
             key: key,
             acl: acl,
             contentType: contentType,
-            replacementStream: replacementStream
+            replacementStream: replacementStream,
+            bufferStream: bufferStream
           })
         })
       })
@@ -101,6 +105,7 @@ S3Storage.prototype._handleFile = function (req, file, cb) {
     var fileBuffer
     var currentSize = 0
     var streamer = (opts.replacementStream || file.stream)
+    var readBuffer = (opts.bufferStream || null)
     var upload = this.s3.upload({
       Bucket: opts.bucket,
       Key: opts.key,
@@ -113,13 +118,15 @@ S3Storage.prototype._handleFile = function (req, file, cb) {
       if (ev.total) currentSize = ev.total
     })
 
-    streamer.on('data', function (chunk) {
-      if (!fileBuffer) {
-        fileBuffer = Buffer.concat([chunk])
-      } else {
-        fileBuffer = Buffer.concat([fileBuffer, chunk])
-      }
-    })
+    if (readBuffer) {
+      readBuffer.on('data', function (chunk) {
+        if (!fileBuffer) {
+          fileBuffer = Buffer.concat([chunk])
+        } else {
+          fileBuffer = Buffer.concat([fileBuffer, chunk])
+        }
+      })
+    }
 
     upload.send(function (err, result) {
       if (err) return cb(err)
